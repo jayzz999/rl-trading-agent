@@ -49,18 +49,19 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                         action, _ = model.predict(obs, deterministic=True)
                         obs, reward, terminated, truncated, info = test_env.step(int(action))
                         portfolio_values.append(info['portfolio_value'])
-                        actions_taken.append(action)
+                        actions_taken.append(int(action))
                         if terminated or truncated:
                             break
                 
                 # Calculate metrics
-                initial_value = portfolio_values[0]
-                final_value = portfolio_values[-1]
+                initial_value = float(portfolio_values[0])
+                final_value = float(portfolio_values[-1])
                 total_return = ((final_value - initial_value) / initial_value) * 100
                 
                 # Buy and hold comparison
-                buy_hold_return = ((df_test['Close'].iloc[-1] - df_test['Close'].iloc[0]) / 
-                                   df_test['Close'].iloc[0]) * 100
+                first_price = float(df_test['Close'].iloc[0])
+                last_price = float(df_test['Close'].iloc[-1])
+                buy_hold_return = ((last_price - first_price) / first_price) * 100
                 
                 # Display metrics
                 col1, col2, col3 = st.columns(3)
@@ -78,11 +79,13 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                 ))
                 
                 # Add buy & hold baseline
-                buy_hold_values = [initial_value * (1 + (df_test['Close'].iloc[i] - df_test['Close'].iloc[0]) / 
-                                                     df_test['Close'].iloc[0]) 
-                                   for i in range(len(df_test))]
+                buy_hold_values = []
+                for i in range(len(portfolio_values)):
+                    price_change = (float(df_test['Close'].iloc[i]) - first_price) / first_price
+                    buy_hold_values.append(initial_value * (1 + price_change))
+                
                 fig.add_trace(go.Scatter(
-                    y=buy_hold_values[:len(portfolio_values)],
+                    y=buy_hold_values,
                     mode='lines',
                     name='Buy & Hold',
                     line=dict(color='blue', width=2, dash='dash')
@@ -99,12 +102,16 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                 
                 # Action distribution
                 st.subheader("📊 Trading Actions")
-                action_counts = pd.Series(actions_taken).value_counts()
                 action_names = {0: 'Hold', 1: 'Buy', 2: 'Sell'}
-                action_df = pd.DataFrame({
-                    'Action': [action_names[i] for i in action_counts.index],
-                    'Count': action_counts.values
-                })
+                action_series = pd.Series(actions_taken)
+                action_counts = action_series.value_counts()
+                
+                action_data = []
+                for action_num in [0, 1, 2]:
+                    count = int(action_counts.get(action_num, 0))
+                    action_data.append({'Action': action_names[action_num], 'Count': count})
+                
+                action_df = pd.DataFrame(action_data)
                 st.bar_chart(action_df.set_index('Action'))
                 
             else:
@@ -112,6 +119,8 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                 
         except Exception as e:
             st.error(f"Error: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
 
 # Info section
 with st.expander("ℹ️ About This Agent"):
